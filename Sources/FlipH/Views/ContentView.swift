@@ -2,6 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var controller: FlipController
+    let language: AppLanguage
+
+    private var mirrorButtonTitle: LocalizedStringResource {
+        if controller.active { return "Turn Off Mirroring" }
+        if controller.busy { return "Preparing…" }
+        return "Flip Horizontally"
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -9,15 +16,15 @@ struct ContentView: View {
                 .font(.system(size: 32, weight: .medium)).foregroundStyle(.tint)
             VStack(spacing: 6) {
                 Text("Flip H").font(.title.bold())
-                Text("Espejo horizontal para tu monitor externo.")
-                    .foregroundStyle(.secondary)
+                Text(language.localized("Flip your external display horizontally."))
+                    .multilineTextAlignment(.center).foregroundStyle(.secondary)
             }
             if controller.displays.isEmpty {
-                Text("Conecta un monitor externo y elige «Pantalla ampliada» en los ajustes de macOS.")
+                Text(language.localized("Connect an external display and set it to extend your desktop in System Settings."))
                     .multilineTextAlignment(.center).foregroundStyle(.secondary)
-                Button("Actualizar pantallas") { controller.refreshDisplays() }
+                Button(language.localized("Refresh Displays")) { controller.refreshDisplays() }
             } else {
-                Picker("Monitor", selection: $controller.selectedID) {
+                Picker(language.localized("Display"), selection: $controller.selectedID) {
                     ForEach(controller.displays) { display in
                         Text("\(display.name) · \(Int(display.size.width)) × \(Int(display.size.height))")
                             .tag(display.id)
@@ -30,20 +37,23 @@ struct ContentView: View {
                 } label: {
                     HStack {
                         if controller.busy { ProgressView().controlSize(.small) }
-                        Text(controller.active ? "Desactivar espejo" : controller.busy ? "Preparando…" : "Activar espejo horizontal")
+                        Text(language.localized(mirrorButtonTitle))
                     }.frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .disabled(controller.busy).keyboardShortcut(.defaultAction)
             }
             if let message = controller.message {
-                Text(message).font(.callout).multilineTextAlignment(.center).textSelection(.enabled)
+                Text(language.localized(message))
+                    .font(.callout).multilineTextAlignment(.center).textSelection(.enabled)
             }
             if controller.needsPermission {
-                Button("Abrir permisos de pantalla") { controller.openPermissions() }
+                Button(language.localized("Open Screen Recording Settings")) { controller.openPermissions() }
             }
-            Text(controller.active ? "Espejo activo · Esc para desactivar" : "Esc desactiva el espejo en cualquier momento.")
-                .font(.caption).foregroundStyle(.secondary)
+            if controller.active {
+                Text(language.localized("Mirroring is on"))
+                    .multilineTextAlignment(.center).font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(28).frame(width: 390)
     }

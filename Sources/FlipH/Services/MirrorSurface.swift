@@ -17,8 +17,10 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
     private let commandQueue: MTLCommandQueue
     private let frames: FrameMailbox
     private let screenFrame: CGRect
+    private let mirroredCursorFrame: CGRect
     private let displayID: CGDirectDisplayID
     private var cursorHidden = false
+    private var menuTrackingDepth = 0
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     private let cursorImage: CIImage?
     private let cursorHotspot: CGPoint
@@ -28,6 +30,10 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
               let id = screen.displayID else { throw FlipError.graphicsUnavailable }
         self.frames = frames
         screenFrame = screen.frame
+        let usesSingleScreen = NSScreen.screens.count == 1
+        var cursorFrame = screen.frame
+        if usesSingleScreen { cursorFrame.size.height -= NSStatusBar.system.thickness }
+        mirroredCursorFrame = cursorFrame
         displayID = id
         commandQueue = queue
         context = CIContext(mtlDevice: device, options: [.cacheIntermediates: false])
@@ -47,7 +53,8 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
-        panel.level = .screenSaver
+        // With a single screen, the menu bar must stay above the mirror so the user can stop it.
+        panel.level = usesSingleScreen ? .init(rawValue: NSWindow.Level.mainMenu.rawValue - 1) : .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
@@ -56,6 +63,12 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
         panel.contentView = metalView
         super.init()
         metalView.delegate = self
+        if usesSingleScreen {
+            NotificationCenter.default.addObserver(self, selector: #selector(menuDidBeginTracking),
+                                                   name: NSMenu.didBeginTrackingNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(menuDidEndTracking),
+                                                   name: NSMenu.didEndTrackingNotification, object: nil)
+        }
     }
 
     func show() {
@@ -78,6 +91,15 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
         }
     }
 
+    @objc private func menuDidBeginTracking() {
+        menuTrackingDepth += 1
+        restoreCursor()
+    }
+
+    @objc private func menuDidEndTracking() {
+        menuTrackingDepth = max(0, menuTrackingDepth - 1)
+    }
+
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
@@ -88,12 +110,12 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
             // Capture excludes the system cursor. Paint it before reflection so the
             // desktop and pointer behave like a hardware H-flip through a mirror.
             let point = NSEvent.mouseLocation
-            let isOverTarget = screenFrame.contains(point)
-            if isOverTarget && !cursorHidden {
+            let showsMirroredCursor = menuTrackingDepth == 0 && mirroredCursorFrame.contains(point)
+            if showsMirroredCursor && !cursorHidden {
                 if CGDisplayHideCursor(displayID) == .success { cursorHidden = true }
-            } else if !isOverTarget { restoreCursor() }
+            } else if !showsMirroredCursor { restoreCursor() }
 
-            if isOverTarget, let cursorImage {
+            if showsMirroredCursor, let cursorImage {
                 let sx = source.extent.width / screenFrame.width
                 let sy = source.extent.height / screenFrame.height
                 let cursor = cursorImage.transformed(by: .init(scaleX: sx, y: sy))
@@ -111,15 +133,14 @@ final class MirrorSurface: NSObject, MTKViewDelegate {
     }
 }
 
-enum FlipError: LocalizedError {
-    case graphicsUnavailable, missingDisplay, captureUnavailable, escapeUnavailable, noFrames
-    var errorDescription: String? {
+enum FlipError: Error {
+    case graphicsUnavailable, missingDisplay, captureUnavailable, noFrames
+    var message: LocalizedStringResource {
         switch self {
-        case .graphicsUnavailable: return "No se pudo iniciar la salida de vídeo."
-        case .missingDisplay: return "Conecta un monitor externo y configúralo como pantalla ampliada."
-        case .captureUnavailable: return "No se pudo preparar la captura de pantalla."
-        case .escapeUnavailable: return "La tecla Esc está ocupada por otra app. Ciérrala e inténtalo de nuevo."
-        case .noFrames: return "El monitor no está enviando imagen. Comprueba el permiso de grabación de pantalla."
+        case .graphicsUnavailable: return "Could not start video output."
+        case .missingDisplay: return "Connect an external display and set it to extend your desktop."
+        case .captureUnavailable: return "Could not set up screen capture."
+        case .noFrames: return "No image was received from the display. Check the screen recording permission."
         }
     }
 }

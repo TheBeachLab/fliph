@@ -9,11 +9,10 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
     @Published var selectedID: CGDirectDisplayID = 0
     @Published private(set) var active = false
     @Published private(set) var busy = false
-    @Published var message: String?
+    @Published private(set) var message: LocalizedStringResource?
     @Published var needsPermission = false
     private var stream: SCStream?
     private var surface: MirrorSurface?
-    private var escape: EscapeHotKey?
     private var generation = 0
     private var observers: [NSObjectProtocol] = []
     private weak var controls: NSWindow?
@@ -28,7 +27,10 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
             Task { @MainActor in
                 guard let self else { return }
                 // Any reconfiguration invalidates the capture dimensions and origin.
-                if self.active || self.busy { self.stop(); self.message = "La disposición de pantallas ha cambiado. Puedes activar el espejo de nuevo." }
+                if self.active || self.busy {
+                    self.stop()
+                    self.message = "The display arrangement changed. You can turn mirroring on again."
+                }
                 self.refreshDisplays()
             }
         })
@@ -52,12 +54,12 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         defer { if generation == operation { busy = false } }
         guard let screen = NSScreen.screens.first(where: { $0.displayID == selectedID }),
               CGDisplayIsBuiltin(selectedID) == 0, CGDisplayIsInMirrorSet(selectedID) == 0 else {
-            message = FlipError.missingDisplay.localizedDescription
+            message = FlipError.missingDisplay.message
             return
         }
         guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
             needsPermission = true
-            message = "Permite que Flip H grabe la pantalla en Ajustes del Sistema. Después vuelve a abrir la app."
+            message = "Allow Flip H to capture your screen in System Settings, then reopen the app."
             return
         }
         do {
@@ -81,10 +83,6 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
             let surface = try MirrorSurface(screen: screen, frames: frames)
             let capture = SCStream(filter: filter, configuration: configuration, delegate: self)
             try capture.addStreamOutput(frames, type: .screen, sampleHandlerQueue: captureQueue)
-            let hotKey = EscapeHotKey()
-            hotKey.onEscape = { [weak self] in Task { @MainActor in self?.stop() } }
-            try hotKey.register()
-            self.escape = hotKey
             self.surface = surface
             self.stream = capture
             try await capture.startCapture()
@@ -98,7 +96,7 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
             guard generation == operation else { return }
             active = true
             controls = NSApp.windows.first(where: { $0.styleMask.contains(.titled) && $0.isVisible })
-            // Controls stay on another screen when one exists; otherwise Esc reveals them.
+            // Keep the controls off the mirrored screen. With one screen, use the menu bar to stop.
             if let other = NSScreen.screens.first(where: { $0.displayID != selectedID }), let controls {
                 controls.setFrameOrigin(NSPoint(x: other.visibleFrame.midX - controls.frame.width / 2,
                                                 y: other.visibleFrame.midY - controls.frame.height / 2))
@@ -107,7 +105,7 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         } catch {
             guard generation == operation else { return }
             stop()
-            message = error.localizedDescription
+            message = (error as? FlipError)?.message ?? "\(error.localizedDescription)"
         }
     }
 
@@ -115,8 +113,6 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         generation += 1
         surface?.close()
         surface = nil
-        escape?.unregister()
-        escape = nil
         let oldStream = stream
         stream = nil
         active = false
@@ -129,7 +125,7 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         Task { @MainActor [weak self] in
             guard let self, self.stream === stream else { return }
             self.stop()
-            self.message = error.localizedDescription
+            self.message = "\(error.localizedDescription)"
         }
     }
 

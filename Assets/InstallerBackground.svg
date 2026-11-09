@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="380" viewBox="0 0 660 380">
+  <rect width="660" height="380" fill="#f6faff"/>
+  <text x="330" y="71" text-anchor="middle" font-family="Helvetica Neue, Helvetica, sans-serif" font-size="32" font-weight="bold" fill="#142b49">Install Flip H</text>
+  <text x="330" y="101" text-anchor="middle" font-family="Helvetica Neue, Helvetica, sans-serif" font-size="15" fill="#456180">Drag Flip H into Applications</text>
+  <rect x="42.5" y="132.5" width="575" height="188" rx="25" fill="#eaf2fc" stroke="#d8e6f6"/>
+  <polygon points="286,208 357,208 345,196 349,192 368,211 349,230 345,226 357,214 286,214" fill="#3d6eaf"/>
+</svg>
