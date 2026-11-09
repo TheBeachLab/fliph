@@ -43,8 +43,32 @@ macOS to approve its screen-capture permission again.
 To build a universal distribution DMG, install ImageMagick and uv, then pass a
 Developer ID Application identity to `script/build_dmg.sh`. It uses dmgbuild to
 lay out the Finder window, signs the app and disk image, and writes
-`outputs/Flip-H-1.0.dmg`. Submit the signed DMG with `xcrun notarytool submit`
-using a configured keychain profile, then staple the ticket with `xcrun stapler staple`.
+`outputs/Flip-H-1.0.dmg`.
+
+Configure notarization once with an existing App Store Connect team API key.
+The key's issuer UUID is different from the Developer Team ID. Keep the private
+`.p8` file outside the repository; `notarytool` validates it and stores the
+credentials in the macOS Keychain:
+
+```sh
+xcrun notarytool store-credentials FlipH \
+  --key /secure/path/AuthKey_KEYID.p8 --key-id KEYID --issuer ISSUER_UUID
+```
+
+Submit the signed DMG and wait for `Accepted` before stapling and validating the
+ticket. If the wait is interrupted, use `notarytool wait SUBMISSION_ID` with the
+same profile to resume checking the existing submission.
+
+```sh
+xcrun notarytool submit outputs/Flip-H-1.0.dmg --keychain-profile FlipH --wait
+xcrun stapler staple outputs/Flip-H-1.0.dmg
+xcrun stapler validate outputs/Flip-H-1.0.dmg
+codesign --verify --strict outputs/Flip-H-1.0.dmg
+spctl --assess --type open --context context:primary-signature --verbose=2 outputs/Flip-H-1.0.dmg
+```
+
+Apple documents [API key authentication](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool)
+and the [notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 
 ## Implementation
 
