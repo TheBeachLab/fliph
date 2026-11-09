@@ -1,16 +1,32 @@
+<img src="docs/images/fliph-icon.png" alt="Flip H icon" width="112" height="112">
+
 # Flip H
 
-A small native macOS utility that horizontally flips one external monitor.
+A small native macOS menu bar utility that horizontally flips an external display.
+Useful for **teleprompters and screens viewed through a mirror**: the horizontal
+flip compensates for the physical reflection, so text and interfaces appear the
+right way around to the viewer. Use your usual prompting app, browser, or
+presentation on the selected display.
+
 Select an extended display and activate the mirror. To stop, choose **Turn Off
 Mirroring** from the ↔ menu or the control window.
 The built-in display and other monitors retain their normal presentation.
+
+[**Download Flip H 1.0**](https://github.com/TheBeachLab/fliph/releases/latest)
+— macOS 14+, Apple Silicon and Intel. Developer ID signed and notarized by Apple.
+
+<img src="docs/images/fliph-controls.png" alt="Flip H control window, waiting for an external display" width="390">
+
+*Flip H's control window before an external display is connected.*
 
 ## Run
 
 For a prebuilt copy, open the DMG from [GitHub Releases](https://github.com/TheBeachLab/fliph/releases)
 and drag **Flip H** into **Applications**. The DMG supports Apple Silicon and Intel Macs with macOS 14 or later.
 
-Open `outputs/Flip H.app`. Flip H lives in the menu bar. Click the ↔ icon and
+<img src="docs/images/fliph-installer.png" alt="Flip H installer with the app on the left and Applications on the right" width="660">
+
+Launch **Flip H** from Applications. Flip H lives in the menu bar. Click the ↔ icon and
 choose **Open Controls** to open the control window. Under **Language**, choose
 English, German, French, Spanish, Catalan, Italian, or Portuguese. Flip H saves
 your selection and applies it immediately. **System Language** is the default
