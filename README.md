@@ -12,7 +12,7 @@ Select an extended display and activate the mirror. To stop, choose **Turn Off
 Mirroring** from the ↔ menu or the control window.
 The built-in display and other monitors retain their normal presentation.
 
-[**Download Flip H 1.0**](https://github.com/TheBeachLab/fliph/releases/latest)
+[**Download Flip H 1.0.1**](https://github.com/TheBeachLab/fliph/releases/latest)
 — macOS 14+, Apple Silicon and Intel. Developer ID signed and notarized by Apple.
 
 <img src="docs/images/fliph-controls.png" alt="Flip H control window, waiting for an external display" width="390">
