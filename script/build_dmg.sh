@@ -10,7 +10,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SIGNING_IDENTITY="$1"
 "$ROOT_DIR/script/build_and_run.sh" --build-universal
 
-APP_BUNDLE="$ROOT_DIR/outputs/Flip H.app"
+APP_BUNDLE="$ROOT_DIR/work/distribution/Flip H.app"
 INFO_PLIST="$APP_BUNDLE/Contents/Info.plist"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw "$INFO_PLIST")"
 BUNDLE_ID="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$INFO_PLIST")"
@@ -58,5 +58,7 @@ PATH="$WORK_DIR/bin:$PATH" UV_CACHE_DIR="$ROOT_DIR/work/uv-cache" uvx --from 'dm
     "Flip H $VERSION" "$STAGED_DMG"
 /usr/bin/codesign --timestamp --identifier "$BUNDLE_ID.dmg" --sign "$SIGNING_IDENTITY" "$STAGED_DMG"
 /usr/bin/codesign --verify --strict "$STAGED_DMG"
+# Export only the Developer ID-signed app alongside the signed disk image.
+/usr/bin/ditto "$STAGED_APP" "$ROOT_DIR/outputs/Flip H.app"
 mv "$STAGED_DMG" "$DMG"
 printf '%s\n' "$DMG"

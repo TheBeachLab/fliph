@@ -1,6 +1,8 @@
 import AppKit
 import Combine
 import ScreenCaptureKit
+import FlipCore
+import OSLog
 
 @MainActor
 final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
@@ -13,6 +15,8 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
     @Published var needsPermission = false
     private var stream: SCStream?
     private var surface: MirrorSurface?
+    private var captureConfiguration: MirrorConfiguration?
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "local.fran.fliph", category: "Capture")
     private var generation = 0
     private var observers: [NSObjectProtocol] = []
     private weak var controls: NSWindow?
@@ -26,10 +30,15 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                // Any reconfiguration invalidates the capture dimensions and origin.
-                if self.active || self.busy {
+                // macOS also sends this notification without changing display geometry.
+                // In particular, screen-sharing UI must not stop a newly started mirror.
+                if (self.active || self.busy),
+                   self.captureConfiguration != self.currentCaptureConfiguration() {
+                    self.logger.notice("Stopping mirroring because the capture display configuration changed")
                     self.stop()
                     self.message = "The display arrangement changed. You can turn mirroring on again."
+                } else if self.active || self.busy {
+                    self.logger.info("Ignoring screen notification: capture display configuration is unchanged")
                 }
                 self.refreshDisplays()
             }
@@ -44,6 +53,17 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         if !displays.contains(where: { $0.id == selectedID }) { selectedID = displays.first?.id ?? 0 }
     }
 
+    private func currentCaptureConfiguration() -> MirrorConfiguration? {
+        let screens = NSScreen.screens.compactMap { screen -> MirrorConfiguration.Screen? in
+            guard let id = screen.displayID else { return nil }
+            return .init(id: id, frame: screen.frame,
+                         pixelSize: CGSize(width: CGDisplayPixelsWide(id), height: CGDisplayPixelsHigh(id)),
+                         rotation: CGDisplayRotation(id),
+                         canMirror: CGDisplayIsActive(id) != 0 && CGDisplayIsBuiltin(id) == 0 && CGDisplayIsInMirrorSet(id) == 0)
+        }
+        return MirrorConfiguration(displayID: selectedID, screens: screens)
+    }
+
     func start() async {
         guard !active, !busy else { return }
         busy = true
@@ -53,11 +73,13 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         let operation = generation
         defer { if generation == operation { busy = false } }
         guard let screen = NSScreen.screens.first(where: { $0.displayID == selectedID }),
-              CGDisplayIsBuiltin(selectedID) == 0, CGDisplayIsInMirrorSet(selectedID) == 0 else {
+              let configuration = currentCaptureConfiguration() else {
             message = FlipError.missingDisplay.message
             return
         }
+        captureConfiguration = configuration
         guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            logger.error("Screen capture permission was denied for this app identity")
             needsPermission = true
             message = "Allow Flip H to capture your screen in System Settings, then reopen the app."
             return
@@ -95,6 +117,7 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
             guard frames.frame() != nil else { throw FlipError.noFrames }
             guard generation == operation else { return }
             active = true
+            logger.notice("Mirroring started after receiving a complete frame")
             controls = NSApp.windows.first(where: { $0.styleMask.contains(.titled) && $0.isVisible })
             // Keep the controls off the mirrored screen. With one screen, use the menu bar to stop.
             if let other = NSScreen.screens.first(where: { $0.displayID != selectedID }), let controls {
@@ -104,6 +127,7 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
             surface.show()
         } catch {
             guard generation == operation else { return }
+            logger.error("Capture failed: \(error.localizedDescription, privacy: .public)")
             stop()
             message = (error as? FlipError)?.message ?? "\(error.localizedDescription)"
         }
@@ -113,6 +137,7 @@ final class FlipController: NSObject, ObservableObject, SCStreamDelegate {
         generation += 1
         surface?.close()
         surface = nil
+        captureConfiguration = nil
         let oldStream = stream
         stream = nil
         active = false
